@@ -1,12 +1,23 @@
 import express from "express";
 import dotenv from "dotenv";
 import axios from "axios";
+import redis from "redis";
 
 dotenv.config();
 const app = express();
 
 const port = process.env.PORT || 3004;
 const api = process.env.API_KEY;
+
+let redisClient;
+
+(async () => {
+  redisClient = redis.createClient();
+
+  redisClient.on("error", (error) => console.error(`Error: ${error}`));
+
+  await redisClient.connect().catch(console.error);
+})();
 
 async function getWeather(a: string) {
   try {
