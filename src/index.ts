@@ -1,7 +1,7 @@
 import express from "express";
 import dotenv from "dotenv";
 import axios from "axios";
-import redis from "redis";
+import { createClient } from "redis";
 
 dotenv.config();
 const app = express();
@@ -9,25 +9,36 @@ const app = express();
 const port = process.env.PORT || 3004;
 const api = process.env.API_KEY;
 
-let redisClient;
+// Connection of Redis
+const redisClient = createClient({
+  socket: {
+    host: "localhost",
+    port: 6379,
+  },
+});
 
-(async () => {
-  redisClient = redis.createClient();
+redisClient.on("error", (err) => {
+  console.error("Redis error:", err);
+});
 
-  redisClient.on("error", (error) => console.error(`Error: ${error}`));
-
-  await redisClient.connect().catch(console.error);
-})();
+// Connect to Redis
+redisClient.connect().catch(console.error);
 
 async function getWeather(a: string) {
   try {
+    const cachedData = await redisClient.get("weather_condition");
+    if (cachedData) {
+      return JSON.parse(cachedData);
+    }
     const response = await axios.get(
       `http://api.weatherapi.com/v1/current.json?key=${api}&q=${a}&aqi=no`,
     );
-    return {
-      Condition: response.data.current.condition.text,
-      Temperature: response.data.current.temp_c,
-    };
+    const condition = response.data.current.condition.text;
+
+    await redisClient.set("weather_condition", JSON.stringify(condition), {
+      EX: 10,
+    });
+    return condition;
   } catch (error) {
     console.error(error);
     throw error;

@@ -15,18 +15,36 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const axios_1 = __importDefault(require("axios"));
+const redis_1 = require("redis");
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 const port = process.env.PORT || 3004;
 const api = process.env.API_KEY;
+// Connection of Redis
+const redisClient = (0, redis_1.createClient)({
+    socket: {
+        host: "localhost",
+        port: 6379,
+    },
+});
+redisClient.on("error", (err) => {
+    console.error("Redis error:", err);
+});
+// Connect to Redis
+redisClient.connect().catch(console.error);
 function getWeather(a) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
+            const cachedData = yield redisClient.get("weather_condition");
+            if (cachedData) {
+                return JSON.parse(cachedData);
+            }
             const response = yield axios_1.default.get(`http://api.weatherapi.com/v1/current.json?key=${api}&q=${a}&aqi=no`);
-            return {
-                Condition: response.data.current.condition.text,
-                Temperature: response.data.current.temp_c,
-            };
+            const condition = response.data.current.condition.text;
+            yield redisClient.set("weather_condition", JSON.stringify(condition), {
+                EX: 10,
+            });
+            return condition;
         }
         catch (error) {
             console.error(error);
